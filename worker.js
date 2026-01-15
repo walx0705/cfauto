@@ -1,9 +1,5 @@
 /**
- * Cloudflare Worker 多项目部署管理器 (V5.4 Header Integration)
- * * 更新日志：
- * 1. [布局优化] "自动检测与熔断设置" 移至顶部标题栏右侧，节省版面空间。
- * 2. [UI调整] 顶部控制栏采用紧凑型 Flex 布局。
- * 3. [内核保持] 继承 V5.3 的所有核心功能（汉化、变量自定义、全局熔断）。
+ * Cloudflare Worker 多项目部署管理器 (V5.5 Upstream Time)
  */
 
 // ==========================================
@@ -348,7 +344,7 @@ function mainHtml() {
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <title>Worker 智能中控 (V5.4)</title>
+  <title>Worker 智能中控 (V5.5)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     .input-field { border: 1px solid #cbd5e1; padding: 0.25rem 0.5rem; width:100%; border-radius: 4px; font-size: 0.8rem; } 
@@ -366,8 +362,8 @@ function mainHtml() {
     
     <header class="bg-white px-6 py-4 rounded shadow flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
-            <h1 class="text-xl font-bold text-slate-800 flex items-center gap-2">🚀 Worker 部署中控 <span class="text-xs bg-slate-200 text-slate-600 px-2 py-0.5 rounded ml-2">V5.4</span></h1>
-            <div class="text-[10px] text-gray-400 mt-1">全局管理 · 自动排序 · 双重熔断</div>
+            <h1 class="text-xl font-bold text-slate-800 flex items-center gap-2">🚀 Worker 部署中控 <span class="text-xs bg-slate-200 text-slate-600 px-2 py-0.5 rounded ml-2">V5.5</span></h1>
+            <div class="text-[10px] text-gray-400 mt-1">全局管理 · 自动排序 · 上游监控</div>
         </div>
         
         <div class="flex items-center gap-3 bg-slate-50 p-2 rounded border border-slate-200">
@@ -444,7 +440,7 @@ function mainHtml() {
         <div class="bg-white rounded shadow overflow-hidden border-t-4 border-red-500">
             <div class="bg-red-50 px-4 py-2 flex justify-between items-center border-b border-red-100">
                 <span class="text-sm font-bold text-red-700">🔴 CMliu 配置</span>
-                <span id="ver_cmliu" class="text-[10px] text-red-400 font-mono">Checking...</span>
+                <span id="ver_cmliu" class="text-[10px] font-mono flex items-center">Checking...</span>
             </div>
             <div class="p-3">
                 <div id="vars_cmliu" class="space-y-1 mb-3 max-h-[150px] overflow-y-auto"></div>
@@ -461,7 +457,7 @@ function mainHtml() {
         <div class="bg-white rounded shadow overflow-hidden border-t-4 border-blue-500">
             <div class="bg-blue-50 px-4 py-2 flex justify-between items-center border-b border-blue-100">
                 <span class="text-sm font-bold text-blue-700">🔵 Joey 配置</span>
-                <span id="ver_joey" class="text-[10px] text-blue-400 font-mono">Checking...</span>
+                <span id="ver_joey" class="text-[10px] font-mono flex items-center">Checking...</span>
             </div>
             <div class="p-3">
                 <div id="vars_joey" class="space-y-1 mb-3 max-h-[150px] overflow-y-auto"></div>
@@ -584,7 +580,6 @@ function mainHtml() {
         alert('✅ 全局设置已保存');
     }
 
-    // 变量管理核心函数
     async function loadVars(type) {
         const container = document.getElementById(\`vars_\${type}\`);
         container.innerHTML = '<div class="text-gray-300 text-center py-2">加载中...</div>';
@@ -594,7 +589,6 @@ function mainHtml() {
             const defaults = TEMPLATES[type].defaultVars;
             const uuidKey = TEMPLATES[type].uuidField;
             
-            // 数据合并逻辑
             const varMap = new Map();
             if(Array.isArray(savedVars)) savedVars.forEach(v => varMap.set(v.key, v.value));
             
@@ -602,14 +596,13 @@ function mainHtml() {
                 if(!varMap.has(k)) varMap.set(k, k === uuidKey ? crypto.randomUUID() : '');
             });
             
-            container.innerHTML = ''; // 清空加载状态
+            container.innerHTML = '';
             varMap.forEach((v, k) => {
-                addVarRow(type, k, v, true); // true 表示是初始加载的
+                addVarRow(type, k, v, true);
             });
         } catch(e) { container.innerHTML = '加载失败'; }
     }
 
-    // 新增：添加变量行 (支持自定义 Key)
     function addVarRow(type, key = '', val = '', isLoaded = false) {
         const container = document.getElementById(\`vars_\${type}\`);
         const div = document.createElement('div');
@@ -657,11 +650,15 @@ function mainHtml() {
         try {
             const res = await fetch(\`/api/check_update?type=\${type}\`);
             const d = await res.json();
+            // 获取上游时间
+            const upstreamTime = d.remote ? timeAgo(d.remote.date) : "未知时间";
+            
             if(d.remote && (!d.local || d.remote.sha !== d.local.sha)) {
-                el.innerHTML = '<span class="text-red-500 font-bold animate-pulse">🔴 有更新</span>';
+                // 有更新：上游时间放在左侧
+                el.innerHTML = \`<span class="text-gray-400 mr-2">\${upstreamTime}</span><span class="text-red-500 font-bold animate-pulse">🔴 有更新</span>\`;
             } else {
-                const ago = d.local ? timeAgo(d.local.deployDate) : "无记录";
-                el.innerHTML = \`<span class="text-green-600">✅ 已是最新 (\${ago})</span>\`;
+                // 已最新：上游时间放在左侧
+                el.innerHTML = \`<span class="text-gray-400 mr-2">\${upstreamTime}</span><span class="text-green-600">✅ 已是最新</span>\`;
             }
         } catch(e) { el.innerText = '状态获取失败'; }
     }
